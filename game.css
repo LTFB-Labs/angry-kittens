@@ -82,6 +82,7 @@ body { background: #2f8fe8; }
 .ak-bubble {
   position: absolute;
   transform: translate(-82%, -100%);
+  width: max-content;
   max-width: 30cqw;
   padding: 1.2cqw 1.8cqw;
   border-radius: 2.4cqw;

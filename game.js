@@ -17,13 +17,9 @@ const V0 = 560;                       // the speed that places the table for the
 const CAT_R = 19;
 const LAUNCH = { x: 124, y: 146 };    // the slingshot's fork: the kitten flies from here
 const SHELF = { x2: 106, y: 196 };
-const TABLE_W = 172;
-const TABLE_TOP = 360;
 const CLOTH_H = 54;                   // how far the tablecloth hangs down from the table top
-const CUP_W = 30;
-const CUP_H = 34;
-const CUP_AT = 0.6;                   // the cup stands at 60% of the table's width
-const FRIDGE = { dx: 74, w: 122, h: 258 };
+const FRIDGE = { x: W - 136, w: 122, h: 258 };   // always in the right corner, with the cat on top
+const CHAIR_W = 56;
 const MIN_ANGLE = 12;
 const MAX_ANGLE = 168;
 const MAX_PULL = 74;
@@ -34,6 +30,33 @@ const INK = '#3a2219';
 /** Range width in degrees per level; null = only acute, right or obtuse. */
 const WIDTHS = [null, null, 50, 40, 30, 20, 15, 10];
 const widthFor = (level) => (level <= WIDTHS.length ? WIDTHS[level - 1] : 6);
+
+/** The table from which level: a wider one, then a higher one (its top nearer the slingshot). */
+const TABLES = [
+  { from: 1, w: 172, h: 118 },
+  { from: 3, w: 196, h: 118 },
+  { from: 5, w: 200, h: 142 },
+  { from: 7, w: 236, h: 128 },
+  { from: 9, w: 240, h: 150 },
+];
+const tableFor = (level) => /** @type {typeof TABLES[number]} */ ([...TABLES].reverse().find((t) => level >= t.from));
+
+/** What stands on the table from which level: [kind, centre from the left edge of a 172 px table, width, height]. */
+const SETS = [
+  { from: 1, name: 'чашата', items: [['cup', 103, 30, 34]] },
+  { from: 3, name: 'вазата', items: [['vase', 104, 32, 78]] },
+  { from: 5, name: 'вазата и чашите', items: [['cup', 62, 30, 34], ['vase', 104, 32, 78], ['cup', 146, 30, 34]] },
+  { from: 7, name: 'пуйката', items: [['cup', 45, 30, 34], ['vase', 70, 32, 78], ['turkey', 111, 76, 52], ['cup', 152, 30, 34]] },
+];
+const setFor = (level) => /** @type {typeof SETS[number]} */ ([...SETS].reverse().find((set) => level >= set.from));
+
+/** What the woman shouts when she finds the mess, by what was on the table. */
+const SCOLDS = {
+  чашата: ['Котко! Чашата ми!', 'Пак ли чашата?!'],
+  вазата: ['Ах, вазата ми!', 'Цветята ми!'],
+  'вазата и чашите': ['Всичко ли счупи?!', 'Ах, ти, разбойник!'],
+  пуйката: ['Пуйката! Вечерята!', 'Котко, пуйката!'],
+};
 
 /** The three kinds of angles: the range that counts and the words the cat uses. */
 const KINDS = {
@@ -183,12 +206,12 @@ export function startGame(root, platform) {
     g.fillRect(win.x + win.w / 2 - 4, win.y, 8, win.h); g.fillRect(win.x, win.y + win.h / 2 - 4, win.w, 8);
     g.fillStyle = '#ff7a3d'; roundRect(g, win.x - 24, win.y + win.h + 6, win.w + 48, 12, 6); g.fill();
     // a clock
-    g.fillStyle = 'rgba(20,70,150,.25)'; g.beginPath(); g.arc(894, 166, 38, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#ff7a3d'; g.beginPath(); g.arc(890, 160, 38, 0, Math.PI * 2); g.fill();
-    g.fillStyle = '#fff'; g.beginPath(); g.arc(890, 160, 30, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(20,70,150,.25)'; g.beginPath(); g.arc(244, 176, 38, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#ff7a3d'; g.beginPath(); g.arc(240, 170, 38, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#fff'; g.beginPath(); g.arc(240, 170, 30, 0, Math.PI * 2); g.fill();
     g.strokeStyle = INK; g.lineCap = 'round';
-    g.lineWidth = 4; g.beginPath(); g.moveTo(890, 160); g.lineTo(890, 140); g.stroke();
-    g.lineWidth = 3; g.beginPath(); g.moveTo(890, 160); g.lineTo(908, 160); g.stroke();
+    g.lineWidth = 4; g.beginPath(); g.moveTo(240, 170); g.lineTo(240, 150); g.stroke();
+    g.lineWidth = 3; g.beginPath(); g.moveTo(240, 170); g.lineTo(258, 170); g.stroke();
     // the floor
     const floor = g.createLinearGradient(0, FLOOR_Y, 0, H);
     floor.addColorStop(0, '#ff8a4c'); floor.addColorStop(0.2, '#f26b2b'); floor.addColorStop(1, '#d8521c');
@@ -222,7 +245,9 @@ export function startGame(root, platform) {
   let target = { kind: 'kind', which: 'acute', ...KINDS.acute };
   /** @type {(keyof typeof KINDS)[]} */
   let kindBag = [];
-  let tableX = 320;     // where the table stands now (its left edge)
+  let tableX = 320;     // where the table stands now (its left edge); the chair stands right of it
+  let tableW = 172;
+  let tableTop = FLOOR_Y - 118;
   let tableFrom = 320;
   let tableTo = 320;
   let clock = 0;        // seconds in the current state
@@ -231,8 +256,8 @@ export function startGame(root, platform) {
   let aiming = false;
   /** @type {{ x: number, y: number }[]} */
   let trail = [];
-  /** @type {number | null} */
-  let lastAngle = null;
+  let tutorial = true;   // the first shot of the visit: an arrow shows how to pull the kitten
+  let showTarget = true; // until the first hit: a target on the cloth
   /**
    * @type {null | {
    *   angle: number, outcome: Outcome, vx: number, vy: number, T: number, t: number,
@@ -241,8 +266,15 @@ export function startGame(root, platform) {
    */
   let shot = null;
   let cloth = 0;        // how far the tablecloth has been pulled off the table
-  /** @type {null | { x: number, y: number, vy: number, rot: number, broken: boolean }} */
-  let cupFall = null;
+  /**
+   * The things on the table: they slide with the cloth and fall when they pass the edge.
+   * @type {{ kind: string, at: number, w: number, h: number, fall: null | { x: number, y: number, vy: number, rot: number, broken: boolean } }[]}
+   */
+  let items = [];
+  let brokenAt = 0;     // when the last thing broke (seconds in the 'hit' state); 0 = not yet
+  let scold = false;    // this time the woman comes and the kitten runs away
+  let hitsSinceScold = 0;
+  let scoldText = '';
   /** @type {{ x: number, y: number, vx: number, vy: number, rot: number, vr: number, color: string, size: number, life: number, kind: string }[]} */
   let bits = [];
   /** @type {null | { text: string, x: number, y: number, t: number }} */
@@ -251,21 +283,21 @@ export function startGame(root, platform) {
   let banner = null;
   let news = '';        // what the cat adds the first time a level brings something new
 
-  const tableRight = () => tableX + TABLE_W;
-  const fridgeX = () => tableX + FRIDGE.dx;
-  const watcher = () => ({ x: fridgeX() + FRIDGE.w * 0.62, y: FLOOR_Y - FRIDGE.h });
+  const tableRight = () => tableX + tableW;
+  const watcher = () => ({ x: FRIDGE.x + FRIDGE.w * 0.62, y: FLOOR_Y - FRIDGE.h });
 
   /** The table distance for the middle of the range: there the shot at speed V0 hits the middle of the cloth. */
   function placeTable(lo, hi) {
     const a = rad((lo + hi) / 2);
-    const D = TABLE_TOP + CLOTH_H / 2 - LAUNCH.y;
+    const D = tableTop + CLOTH_H / 2 - LAUNCH.y;
     const s = Math.sin(a);
     const A = G / (2 * V0 * V0 * s * s);
     const B = Math.cos(a) / s;
     let dx = (-B + Math.sqrt(B * B + 4 * A * D)) / (2 * A);
     // the smallest angle of the range has to reach the cloth: steep shots need the table close
-    if (lo < 90) dx = Math.min(dx, (TABLE_TOP + CLOTH_H - 8 - LAUNCH.y) * Math.tan(rad(lo)) * 0.88);
-    return clamp(LAUNCH.x + dx, LAUNCH.x + 40, W - TABLE_W - 70);
+    if (lo < 90) dx = Math.min(dx, (tableTop + CLOTH_H - 8 - LAUNCH.y) * Math.tan(rad(lo)) * 0.88);
+    // the table and its chair stay in front of the fridge's left side at most
+    return clamp(LAUNCH.x + dx, LAUNCH.x + 40, FRIDGE.x + 30 - CHAIR_W - tableW);
   }
 
   function newTarget() {
@@ -281,10 +313,12 @@ export function startGame(root, platform) {
       const lo = (first + rand(last - first + 1)) * step;
       target = { kind: 'range', lo, hi: lo + width };
     }
+    const table = tableFor(level);
+    tableW = table.w;
+    tableTop = FLOOR_Y - table.h;
     tableFrom = tableX;
     tableTo = placeTable(target.lo, target.hi);
     trail = [];
-    lastAngle = null;
   }
 
   const goalText = () => (target.kind === 'kind' ? KINDS[target.which].say : `от ${target.lo}° до ${target.hi}°`);
@@ -292,9 +326,12 @@ export function startGame(root, platform) {
   function newGame() {
     cups = 0;
     news = '';
+    hitsSinceScold = 0;
     level = 1;
     kittens = ['ginger', 'grey', 'black'];
     kindBag = ['obtuse', 'right', 'acute'];  // the first rounds go in this order: acute, right, obtuse
+    tableW = TABLES[0].w;
+    tableTop = FLOOR_Y - TABLES[0].h;
     tableX = placeTable(KINDS.acute.lo, KINDS.acute.hi);
     startRound(true);
   }
@@ -307,7 +344,9 @@ export function startGame(root, platform) {
     clock = 0;
     shot = null;
     cloth = 0;
-    cupFall = null;
+    items = setFor(level).items.map(([kind, at, w, h]) => ({ kind: String(kind), at: (Number(at) * tableW) / 172, w: Number(w), h: Number(h), fall: null }));
+    brokenAt = 0;
+    scold = false;
     shout = null;
     pull = 0;
     say('Хмм… 🔭', 'Смятам…');
@@ -330,15 +369,16 @@ export function startGame(root, platform) {
 
   /** Does the flight to (x, y) stay clear of the table and the cup (apart from where it lands)? */
   function clear(fly, landsOnTable) {
-    const cupL = tableX + TABLE_W * CUP_AT - CUP_W / 2 - CAT_R * 0.8;
-    const cupR = cupL + CUP_W + CAT_R * 1.6;
     for (let k = 1; k < 60; k++) {
       const t = (fly.T * k) / 60;
       if (landsOnTable && t > fly.T * 0.9) break;
       const x = LAUNCH.x + fly.vx * t;
       const y = LAUNCH.y + fly.vy * t + (G * t * t) / 2;
-      if (x > tableX - CAT_R * 0.6 && x < tableRight() + CAT_R * 0.6 && y > TABLE_TOP - CAT_R * 0.9) return false;
-      if (x > cupL && x < cupR && y > TABLE_TOP - CUP_H - CAT_R * 0.8) return false;
+      if (x > tableX - CAT_R * 0.6 && x < tableRight() + CAT_R * 0.6 && y > tableTop - CAT_R * 0.9) return false;
+      for (const it of items) {
+        const left = tableX + it.at - it.w / 2 - CAT_R * 0.8;
+        if (x > left && x < left + it.w + CAT_R * 1.6 && y > tableTop - it.h - CAT_R * 0.8) return false;
+      }
     }
     return true;
   }
@@ -351,7 +391,7 @@ export function startGame(root, platform) {
       // a bigger angle catches the cloth higher up
       const u = hi > lo ? (angle - lo) / (hi - lo) : 0.5;
       const x = tableX - CAT_R * 0.55;
-      const lowest = TABLE_TOP + CLOTH_H - 6;
+      const lowest = tableTop + CLOTH_H - 6;
       let y = lowest - u * (CLOTH_H - 14);
       if (angle < 90) y = Math.max(y, LAUNCH.y + ((x - LAUNCH.x) / Math.tan(rad(angle))) / 0.9);
       y = Math.min(y, lowest);
@@ -364,7 +404,7 @@ export function startGame(root, platform) {
     }
     // too big: over the table to the floor behind it, else onto the table in front of the cup
     const beyond = Math.min(W - 34, tableRight() + CAT_R + 24 + (angle - hi) * 4);
-    const onTable = TABLE_TOP - 3 - CAT_R;
+    const onTable = tableTop - 3 - CAT_R;
     const front = tableX + CAT_R + 4;
     const options = [
       { outcome: /** @type {Outcome} */ ('beyond'), x: beyond, y: floorY },
@@ -388,7 +428,7 @@ export function startGame(root, platform) {
     const fly = p.fly || { vx: 300, vy: 300, T: 0.5 };   // never needed: plan() keeps every target reachable
     shot = { angle, outcome: p.outcome, ...fly, t: 0, x: LAUNCH.x, y: LAUNCH.y, look: kittens[0], land: { x: p.x, y: p.y } };
     trail = [];
-    lastAngle = angle;
+    tutorial = false;
     state = 'fly';
     clock = 0;
     pull = 0;
@@ -427,7 +467,12 @@ export function startGame(root, platform) {
       sound('meow');
       shout = { text: 'Мяу!', x: shot.x - 10, y: shot.y - 40, t: 0 };
       cups += 1;
+      showTarget = false;
       platform.onPoint?.(cups);
+      // now and then the woman of the house comes to see what broke
+      hitsSinceScold += 1;
+      scold = cups >= 2 && (hitsSinceScold >= 4 || Math.random() < 0.35);
+      if (scold) { hitsSinceScold = 0; scoldText = pick(SCOLDS[setFor(level).name]); }
       say(text, small);
     } else {
       state = 'miss';
@@ -444,14 +489,21 @@ export function startGame(root, platform) {
     }
   }
 
-  function crash(x, y) {
+  /** Pieces of what broke: shards, and what was inside (coffee, water and flowers, chicken). */
+  function crash(x, y, kind) {
     sound('crash');
+    const shard = { cup: ['#ffffff', '#ff5b4a'], vase: ['#4fb0ff', '#ffffff'], turkey: ['#ffffff', '#dbe8f6'] }[kind] || ['#fff', '#fff'];
     for (let k = 0; k < 14; k++) {
-      const white = k % 3 !== 0;
-      bits.push({ x, y: y - 6, vx: (Math.random() - 0.5) * 380, vy: -120 - Math.random() * 260, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 16, color: white ? '#ffffff' : '#ff5b4a', size: 5 + Math.random() * 6, life: 1.4, kind: 'shard' });
+      bits.push({ x, y: y - 6, vx: (Math.random() - 0.5) * 380, vy: -120 - Math.random() * 260, rot: Math.random() * 6, vr: (Math.random() - 0.5) * 16, color: shard[k % 3 === 0 ? 1 : 0], size: 5 + Math.random() * 6, life: 1.4, kind: 'shard' });
     }
+    const drop = { cup: ['#8a4b23'], vase: ['#9fe0ff', '#ff7fb0', '#ffd23f'], turkey: ['#c8742e', '#5bc236'] }[kind] || ['#fff'];
     for (let k = 0; k < 10; k++) {
-      bits.push({ x, y: y - 4, vx: (Math.random() - 0.5) * 260, vy: -60 - Math.random() * 200, rot: 0, vr: 0, color: '#8a4b23', size: 3 + Math.random() * 4, life: 1, kind: 'drop' });
+      bits.push({ x, y: y - 4, vx: (Math.random() - 0.5) * 260, vy: -60 - Math.random() * 200, rot: 0, vr: 0, color: pick(drop), size: 3 + Math.random() * 4, life: 1, kind: 'drop' });
+    }
+    if (kind === 'turkey') {
+      for (let k = 0; k < 2; k++) {
+        bits.push({ x, y: y - 10, vx: (k ? 1 : -1) * (80 + Math.random() * 120), vy: -260 - Math.random() * 140, rot: 0, vr: (k ? 1 : -1) * 9, color: '#c8742e', size: 9, life: 1.6, kind: 'leg' });
+      }
     }
   }
 
@@ -479,7 +531,7 @@ export function startGame(root, platform) {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.rot += b.vr * dt;
-      if (b.kind === 'shard' || b.kind === 'drop') {
+      if (b.kind === 'shard' || b.kind === 'drop' || b.kind === 'leg') {
         b.vy += G * 0.8 * dt;
         if (b.y > FLOOR_Y + 6) { b.y = FLOOR_Y + 6; b.vy *= -0.3; b.vx *= 0.6; b.vr *= 0.5; }
       } else b.vy += (b.kind === 'puff' ? 0 : 60) * dt;
@@ -513,26 +565,37 @@ export function startGame(root, platform) {
     }
 
     if (state === 'hit' && shot) {
-      // the kitten hangs on the cloth and pulls it; the cup slides to the edge and falls
-      const full = TABLE_W * CUP_AT + 8;
-      cloth = full * clamp((clock - 0.15) / 0.75, 0, 1) ** 2;
-      const cupX = tableX + TABLE_W * CUP_AT - cloth;
-      if (!cupFall && cupX < tableX - 2) {
-        cupFall = { x: cupX, y: TABLE_TOP - 3, vy: 0, rot: 0, broken: false };
-        sound('slide');
+      // the kitten hangs on the cloth and pulls it; what is on the table slides to the edge and falls
+      const full = Math.max(...items.map((it) => it.at)) + 8;
+      cloth = full * clamp((clock - 0.15) / (0.75 * Math.sqrt(full / 111)), 0, 1) ** 2;
+      for (const it of items) {
+        const x = tableX + it.at - cloth;
+        if (!it.fall && x < tableX - 2) {
+          it.fall = { x, y: tableTop - 3, vy: 0, rot: 0, broken: false };
+          sound('slide');
+        }
+        const f = it.fall;
+        if (f && !f.broken) {
+          f.vy += G * dt;
+          f.y += f.vy * dt;
+          f.x -= 40 * dt;
+          f.rot -= 5 * dt;
+          if (f.y >= FLOOR_Y) { f.broken = true; crash(f.x, FLOOR_Y, it.kind); }
+        }
       }
-      if (cupFall && !cupFall.broken) {
-        cupFall.vy += G * dt;
-        cupFall.y += cupFall.vy * dt;
-        cupFall.x -= 40 * dt;
-        cupFall.rot -= 5 * dt;
-        if (cupFall.y >= FLOOR_Y) { cupFall.broken = true; crash(cupFall.x, FLOOR_Y); hearts(shot.x, shot.y - 30); }
+      if (!brokenAt && items.every((it) => it.fall?.broken)) { brokenAt = clock; hearts(shot.x, shot.y - 30); }
+      // the kitten goes down with the cloth, then jumps to the floor when everything is broken
+      if (brokenAt) shot.y = Math.min(FLOOR_Y - CAT_R, shot.y + 420 * dt);
+      else shot.y = shot.land.y + cloth * 0.35;
+      const since = brokenAt ? clock - brokenAt : 0;
+      if (scold && brokenAt) {
+        if (since > 1.2 && since - dt <= 1.2) sound('scold');
+        if (since > 1.7) {
+          if (since - dt <= 1.7) { shout = { text: 'Мяу!', x: shot.x, y: shot.y - 40, t: 0 }; sound('meow'); }
+          shot.x -= 420 * dt;  // runs away to the left, very pleased
+        }
       }
-      // the kitten goes down with the cloth, then jumps to the floor when the cup is broken
-      const hangY = shot.land.y + cloth * 0.35;
-      if (cupFall?.broken) shot.y = Math.min(FLOOR_Y - CAT_R, shot.y + 420 * dt);
-      else shot.y = hangY;
-      if (clock > 2.6) {
+      if (brokenAt && since > (scold ? 4.1 : 1.6)) {
         kittens.push(/** @type {string} */ (kittens.shift()));
         levelUp();
         startRound(true);
@@ -736,10 +799,12 @@ export function startGame(root, platform) {
     return { x: LAUNCH.x - Math.sin(a) * pull, y: LAUNCH.y - Math.cos(a) * pull };
   }
 
-  /** The angle under the slingshot: the plumb line, the arc (a square when it is exactly 90°), no number. */
+  /** While the kitten is pulled: the plumb line under the slingshot, the arc (a square at exactly 90°), no number. */
   function drawAngle() {
     const g = ctx;
     const { x, y } = LAUNCH;
+    const showAim = state === 'aim' && (aiming || pull > 0);
+    if (!showAim) return;  // nothing to grab here: the angle shows up only while the kitten is pulled
     g.save();
     g.lineCap = 'round';
     // the plumb line with its weight
@@ -748,9 +813,7 @@ export function startGame(root, platform) {
     g.setLineDash([]);
     g.fillStyle = '#ffd23f'; g.strokeStyle = INK; g.lineWidth = 1.6;
     g.beginPath(); g.moveTo(x - 6, y + 96); g.lineTo(x + 6, y + 96); g.lineTo(x, y + 110); g.closePath(); g.fill(); g.stroke();
-    const showAim = state === 'aim' && (aiming || pull > 0);
-    if (lastAngle !== null && !showAim) ray(lastAngle, 'rgba(255,255,255,.35)', 70);
-    if (showAim) {
+    {
       const a = Math.round(aim);
       const end = Math.PI / 2 - rad(a);
       if (a === 90) {
@@ -776,7 +839,7 @@ export function startGame(root, platform) {
 
   function drawFridge() {
     const g = ctx;
-    const x = fridgeX();
+    const x = FRIDGE.x;
     const top = FLOOR_Y - FRIDGE.h;
     g.fillStyle = 'rgba(20,70,150,.25)'; roundRect(g, x + 8, top + 10, FRIDGE.w, FRIDGE.h - 10, 18); g.fill();
     const body = g.createLinearGradient(x, 0, x + FRIDGE.w, 0);
@@ -820,68 +883,305 @@ export function startGame(root, platform) {
     }
   }
 
+  /** The chair on the far side of the table, its back away from the table. */
+  function drawChair() {
+    const g = ctx;
+    const x = tableRight() + 8;
+    const seat = FLOOR_Y - 64;
+    g.save();
+    g.strokeStyle = INK; g.lineWidth = 2; g.lineJoin = 'round';
+    const wood = (bx, by, bw, bh) => { g.fillStyle = '#c9773a'; g.beginPath(); g.roundRect(bx, by, bw, bh, 3); g.fill(); g.stroke(); };
+    wood(x + 4, seat + 6, 8, FLOOR_Y - seat - 6);
+    wood(x + CHAIR_W - 12, seat - 86, 9, FLOOR_Y - seat + 86);
+    wood(x + CHAIR_W - 40, seat - 82, 30, 9);
+    wood(x + CHAIR_W - 40, seat - 56, 30, 9);
+    wood(x + CHAIR_W - 30, seat - 76, 7, 26);
+    wood(x, seat, CHAIR_W, 9);
+    g.fillStyle = '#ffd23f';
+    g.beginPath(); g.roundRect(x + 2, seat - 8, CHAIR_W - 14, 9, 5); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(160,50,10,.3)';
+    g.beginPath(); g.ellipse(x + CHAIR_W / 2, FLOOR_Y + 3, CHAIR_W * 0.6, 5, 0, 0, Math.PI * 2); g.fill();
+    g.restore();
+  }
+
   function drawTable() {
     const g = ctx;
     const x = tableX;
     // the legs
     g.fillStyle = INK;
-    g.fillRect(x + 12, TABLE_TOP + 8, 12, FLOOR_Y - TABLE_TOP - 8); g.fillRect(x + TABLE_W - 24, TABLE_TOP + 8, 12, FLOOR_Y - TABLE_TOP - 8);
+    g.fillRect(x + 12, tableTop + 8, 12, FLOOR_Y - tableTop - 8); g.fillRect(x + tableW - 24, tableTop + 8, 12, FLOOR_Y - tableTop - 8);
     g.fillStyle = '#c9773a';
-    g.fillRect(x + 14, TABLE_TOP + 8, 8, FLOOR_Y - TABLE_TOP - 8); g.fillRect(x + TABLE_W - 22, TABLE_TOP + 8, 8, FLOOR_Y - TABLE_TOP - 8);
+    g.fillRect(x + 14, tableTop + 8, 8, FLOOR_Y - tableTop - 8); g.fillRect(x + tableW - 22, tableTop + 8, 8, FLOOR_Y - tableTop - 8);
     g.fillStyle = 'rgba(160,50,10,.3)';
-    g.beginPath(); g.ellipse(x + TABLE_W / 2, FLOOR_Y + 3, TABLE_W * 0.6, 6, 0, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(x + tableW / 2, FLOOR_Y + 3, tableW * 0.6, 6, 0, 0, Math.PI * 2); g.fill();
     // the top
-    g.fillStyle = '#b5652e'; roundRect(g, x - 2, TABLE_TOP - 2, TABLE_W + 4, 12, 4); g.fill();
+    g.fillStyle = '#b5652e'; roundRect(g, x - 2, tableTop - 2, tableW + 4, 12, 4); g.fill();
     // the tablecloth: it slides off to the left when the kitten pulls it
-    const right = x + TABLE_W + 5 - cloth;
+    const right = x + tableW + 5 - cloth;
     g.save();
     g.strokeStyle = INK; g.lineWidth = 2;
     if (right > x) {
       g.beginPath();
-      g.moveTo(x - 4, TABLE_TOP - 4);
-      g.lineTo(right, TABLE_TOP - 4);
-      g.lineTo(right, TABLE_TOP + CLOTH_H - cloth * 0.3);
-      for (let k = right; k > x - 4; k -= 12) g.quadraticCurveTo(k - 6, TABLE_TOP + CLOTH_H + 5, Math.max(x - 4, k - 12), TABLE_TOP + CLOTH_H);
+      g.moveTo(x - 4, tableTop - 4);
+      g.lineTo(right, tableTop - 4);
+      g.lineTo(right, tableTop + CLOTH_H - cloth * 0.3);
+      for (let k = right; k > x - 4; k -= 12) g.quadraticCurveTo(k - 6, tableTop + CLOTH_H + 5, Math.max(x - 4, k - 12), tableTop + CLOTH_H);
       g.closePath();
       g.fillStyle = checks || '#ff5b4a'; g.fill(); g.stroke();
-      g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(x - 3, TABLE_TOP - 3, right - x + 2, 6);
+      g.fillStyle = 'rgba(0,0,0,.08)'; g.fillRect(x - 3, tableTop - 3, right - x + 2, 6);
     }
     // the part that has slid over the edge hangs down on the left
-    const hang = Math.min(CLOTH_H + cloth * 0.9, FLOOR_Y - TABLE_TOP - 6);
+    const hang = Math.min(CLOTH_H + cloth * 0.9, FLOOR_Y - tableTop - 6);
     g.beginPath();
-    g.moveTo(x - 4, TABLE_TOP - 4); g.lineTo(x + 2, TABLE_TOP - 4);
-    g.lineTo(x - 2 - cloth * 0.05, TABLE_TOP + hang); g.lineTo(x - 14 - cloth * 0.08, TABLE_TOP + hang - 4);
+    g.moveTo(x - 4, tableTop - 4); g.lineTo(x + 2, tableTop - 4);
+    g.lineTo(x - 2 - cloth * 0.05, tableTop + hang); g.lineTo(x - 14 - cloth * 0.08, tableTop + hang - 4);
     g.closePath();
     g.fillStyle = checks || '#ff5b4a'; g.fill(); g.stroke();
     g.restore();
   }
 
-  function drawCup(x, bottom, rot = 0) {
+  /** One thing on the table (or falling), standing on `bottom`. */
+  function drawItem(it, x, bottom, rot = 0) {
     const g = ctx;
     g.save();
     g.translate(x, bottom);
     g.rotate(rot);
-    g.strokeStyle = INK; g.lineWidth = 2.2;
-    g.beginPath(); g.arc(CUP_W / 2 + 1, -CUP_H * 0.55, 8, -1.3, 1.3); g.lineWidth = 6; g.stroke();
-    g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke();
-    g.strokeStyle = INK; g.lineWidth = 2.2;
-    g.beginPath(); g.roundRect(-CUP_W / 2, -CUP_H, CUP_W, CUP_H, [3, 3, 9, 9]);
-    const body = g.createLinearGradient(-CUP_W / 2, 0, CUP_W / 2, 0);
-    body.addColorStop(0, '#fff'); body.addColorStop(1, '#dbe8f6');
-    g.fillStyle = body; g.fill(); g.stroke();
-    g.fillStyle = '#8a4b23'; g.fillRect(-CUP_W / 2 + 2, -CUP_H + 2, CUP_W - 4, 4);
-    g.fillStyle = '#ff5b4a';
-    g.beginPath();
-    g.moveTo(0, -10); g.bezierCurveTo(-10, -16, -6, -26, 0, -20); g.bezierCurveTo(6, -26, 10, -16, 0, -10); g.fill();
+    g.strokeStyle = INK; g.lineWidth = 2.2; g.lineJoin = 'round'; g.lineCap = 'round';
+    if (it.kind === 'cup') drawCup(g, it.w, it.h);
+    if (it.kind === 'vase') drawVase(g);
+    if (it.kind === 'turkey') drawTurkey(g);
     g.restore();
-    if (!rot && (state === 'aim' || state === 'intro')) {
+    if (it.kind === 'cup' && !rot && (state === 'aim' || state === 'intro')) {
       // steam
       ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 2;
       for (const k of [-5, 5]) {
-        ctx.beginPath(); ctx.moveTo(x + k, bottom - CUP_H - 4);
-        ctx.bezierCurveTo(x + k - 5, bottom - CUP_H - 12, x + k + 5, bottom - CUP_H - 16, x + k, bottom - CUP_H - 24); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(x + k, bottom - it.h - 4);
+        ctx.bezierCurveTo(x + k - 5, bottom - it.h - 12, x + k + 5, bottom - it.h - 16, x + k, bottom - it.h - 24); ctx.stroke();
       }
     }
+  }
+
+  function drawCup(g, w, h) {
+    g.beginPath(); g.arc(w / 2 + 1, -h * 0.55, 8, -1.3, 1.3); g.lineWidth = 6; g.stroke();
+    g.strokeStyle = '#fff'; g.lineWidth = 3; g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 2.2;
+    g.beginPath(); g.roundRect(-w / 2, -h, w, h, [3, 3, 9, 9]);
+    const body = g.createLinearGradient(-w / 2, 0, w / 2, 0);
+    body.addColorStop(0, '#fff'); body.addColorStop(1, '#dbe8f6');
+    g.fillStyle = body; g.fill(); g.stroke();
+    g.fillStyle = '#8a4b23'; g.fillRect(-w / 2 + 2, -h + 2, w - 4, 4);
+    g.fillStyle = '#ff5b4a';
+    g.beginPath();
+    g.moveTo(0, -10); g.bezierCurveTo(-10, -16, -6, -26, 0, -20); g.bezierCurveTo(6, -26, 10, -16, 0, -10); g.fill();
+  }
+
+  function drawVase(g) {
+    // flowers first, the vase in front of their stems
+    g.strokeStyle = '#3c8a0f'; g.lineWidth = 3;
+    const heads = [[-12, -70, '#ff7fb0'], [1, -79, '#ffd23f'], [12, -68, '#ff5b4a']];
+    for (const [hx, hy] of heads) { g.beginPath(); g.moveTo(0, -42); g.quadraticCurveTo(hx * 0.3, -56, Number(hx), Number(hy)); g.stroke(); }
+    g.fillStyle = '#5bc236';
+    g.beginPath(); g.ellipse(-7, -54, 6, 2.6, -0.6, 0, Math.PI * 2); g.fill();
+    g.beginPath(); g.ellipse(7, -52, 6, 2.6, 0.6, 0, Math.PI * 2); g.fill();
+    g.strokeStyle = INK; g.lineWidth = 1.6;
+    for (const [hx, hy, color] of heads) {
+      g.fillStyle = String(color);
+      for (let k = 0; k < 5; k++) {
+        const a = (k * Math.PI * 2) / 5;
+        g.beginPath(); g.arc(Number(hx) + Math.cos(a) * 4.5, Number(hy) + Math.sin(a) * 4.5, 3.6, 0, Math.PI * 2); g.fill(); g.stroke();
+      }
+      g.fillStyle = '#fff3b0'; g.beginPath(); g.arc(Number(hx), Number(hy), 2.8, 0, Math.PI * 2); g.fill(); g.stroke();
+    }
+    g.lineWidth = 2.2;
+    g.beginPath();
+    g.moveTo(-9, -46); g.lineTo(9, -46);
+    g.lineTo(7, -40); g.bezierCurveTo(20, -30, 18, -8, 10, 0);
+    g.lineTo(-10, 0); g.bezierCurveTo(-18, -8, -20, -30, -7, -40);
+    g.closePath();
+    const body = g.createLinearGradient(-16, 0, 16, 0);
+    body.addColorStop(0, '#7cc8ff'); body.addColorStop(1, '#2f8fe8');
+    g.fillStyle = body; g.fill(); g.stroke();
+    g.fillStyle = '#ff7a3d'; g.fillRect(-14, -24, 28, 5);
+    g.fillStyle = 'rgba(255,255,255,.55)';
+    g.beginPath(); g.ellipse(-8, -26, 2.5, 8, 0.2, 0, Math.PI * 2); g.fill();
+  }
+
+  function drawTurkey(g) {
+    // a big roast turkey on a big plate: the small chicken drawing at twice the size, with greens around
+    g.scale(2, 2);
+    g.lineWidth = 1.3;
+    g.fillStyle = '#5bc236';
+    for (const s of [-1, 1]) { g.beginPath(); g.ellipse(s * 15, -7, 5, 2.4, s * 0.4, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#ff9a3d';
+    for (const s of [-1, 1]) { g.beginPath(); g.arc(s * 17, -6, 2.6, Math.PI, 0); g.fill(); g.stroke(); }
+    g.fillStyle = '#fff';
+    g.beginPath(); g.ellipse(0, -4, 19, 5, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    for (const s of [-1, 1]) {
+      g.save(); g.translate(s * 11, -10); g.rotate(s * 0.7);
+      g.fillStyle = '#c8742e'; g.beginPath(); g.ellipse(0, 0, 4, 6, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.fillStyle = '#fff'; g.beginPath(); g.arc(0, -7, 2.4, 0, Math.PI * 2); g.fill(); g.stroke();
+      g.restore();
+    }
+    const skin = g.createRadialGradient(-3, -18, 2, 0, -13, 13);
+    skin.addColorStop(0, '#f2b066'); skin.addColorStop(1, '#b65f21');
+    g.fillStyle = skin;
+    g.beginPath(); g.ellipse(0, -13, 12, 9, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.strokeStyle = 'rgba(255,240,200,.6)'; g.lineWidth = 1.5;
+    g.beginPath(); g.arc(-3, -16, 4, Math.PI * 1.1, Math.PI * 1.7); g.stroke();
+  }
+
+  /** The woman of the house: she walks in from the right, scolds with a rolling pin and walks away. */
+  function drawWoman(since) {
+    const stand = Math.min(W - 70, tableRight() + CHAIR_W + 50);
+    const walkIn = ease(clamp((since - 0.5) / 0.7, 0, 1));
+    const walkOut = ease(clamp((since - 3.1) / 0.8, 0, 1));
+    const x = W + 80 + (stand - W - 80) * walkIn + (W + 80 - stand) * walkOut;
+    if (x > W + 60) return;
+    const angry = since > 1.2 && since < 3.1;
+    const step = walkIn < 1 || walkOut > 0 ? Math.sin(since * 18) * 3 : 0;
+    const shake = angry ? Math.sin(since * 22) * 0.35 : 0;
+    const g = ctx;
+    g.save();
+    g.translate(x, FLOOR_Y + Math.abs(step) * -0.5);
+    g.strokeStyle = INK; g.lineWidth = 2.4; g.lineJoin = 'round'; g.lineCap = 'round';
+    g.fillStyle = 'rgba(160,50,10,.3)'; g.beginPath(); g.ellipse(0, 3, 34, 6, 0, 0, Math.PI * 2); g.fill();
+    // legs and shoes
+    g.fillStyle = '#f2c19b';
+    g.beginPath(); g.roundRect(-13 + step, -44, 9, 40, 4); g.fill(); g.stroke();
+    g.beginPath(); g.roundRect(4 - step, -44, 9, 40, 4); g.fill(); g.stroke();
+    g.fillStyle = '#c9304a';
+    g.beginPath(); g.ellipse(-11 + step, -4, 10, 5, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.beginPath(); g.ellipse(9 - step, -4, 10, 5, 0, 0, Math.PI * 2); g.fill(); g.stroke();
+    // the arm on the hip, behind the dress
+    g.lineWidth = 11; g.strokeStyle = INK;
+    g.beginPath(); g.moveTo(20, -140); g.lineTo(40, -112); g.lineTo(24, -96); g.stroke();
+    g.lineWidth = 7; g.strokeStyle = '#f2c19b'; g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 2.4;
+    // the dress with dots and the apron
+    g.fillStyle = '#e84a6f';
+    g.beginPath(); g.moveTo(-22, -152); g.lineTo(22, -152); g.lineTo(42, -40); g.lineTo(-42, -40); g.closePath(); g.fill(); g.stroke();
+    g.fillStyle = 'rgba(255,255,255,.75)';
+    for (const [dx, dy] of [[-28, -60], [30, -66], [-14, -140], [16, -136], [-34, -48]]) { g.beginPath(); g.arc(dx, dy, 3, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#fff';
+    g.beginPath(); g.moveTo(-17, -120); g.lineTo(17, -120); g.lineTo(26, -50); g.lineTo(-26, -50); g.closePath(); g.fill(); g.stroke();
+    g.beginPath(); g.roundRect(-10, -86, 20, 14, 3); g.stroke();
+    g.fillStyle = '#ff5b4a';
+    g.beginPath(); g.moveTo(0, -98); g.bezierCurveTo(-8, -103, -5, -111, 0, -106); g.bezierCurveTo(5, -111, 8, -103, 0, -98); g.fill();
+    // the raised arm with the rolling pin
+    g.save();
+    g.translate(-20, -142);
+    g.rotate(-0.5 + shake);
+    g.lineWidth = 11; g.beginPath(); g.moveTo(0, 0); g.lineTo(-34, -22); g.stroke();
+    g.lineWidth = 7; g.strokeStyle = '#f2c19b'; g.stroke();
+    g.strokeStyle = INK; g.lineWidth = 2.4;
+    g.translate(-36, -24);
+    g.rotate(1.1);
+    g.fillStyle = '#e9a466'; g.beginPath(); g.roundRect(-26, -6, 52, 12, 6); g.fill(); g.stroke();
+    g.fillStyle = '#c9773a';
+    g.beginPath(); g.roundRect(-38, -3, 12, 6, 3); g.fill(); g.stroke();
+    g.beginPath(); g.roundRect(26, -3, 12, 6, 3); g.fill(); g.stroke();
+    g.restore();
+    // neck, head, hair with a bun
+    g.fillStyle = '#f2c19b';
+    g.fillRect(-5, -166, 10, 16);
+    g.fillStyle = '#6b3b22';
+    g.beginPath(); g.arc(0, -214, 11, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillStyle = '#f2c19b';
+    g.beginPath(); g.arc(0, -186, 22, 0, Math.PI * 2); g.fill(); g.stroke();
+    g.fillStyle = '#6b3b22';
+    g.beginPath(); g.arc(0, -188, 23, Math.PI * 1.02, Math.PI * 1.98); g.quadraticCurveTo(10, -196, 0, -192); g.quadraticCurveTo(-10, -196, -23, -190); g.closePath(); g.fill(); g.stroke();
+    // the face: angry brows, shouting mouth
+    g.fillStyle = INK;
+    for (const s of [-1, 1]) {
+      g.beginPath(); g.arc(s * 8, -184, 2.6, 0, Math.PI * 2); g.fill();
+      g.lineWidth = 3; g.beginPath(); g.moveTo(s * 13, angry ? -194 : -191); g.lineTo(s * 4, angry ? -189 : -191); g.stroke();
+    }
+    g.lineWidth = 2.2;
+    g.fillStyle = 'rgba(255,100,110,.5)';
+    for (const s of [-1, 1]) { g.beginPath(); g.ellipse(s * 13, -177, 4, 2.6, 0, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#7a1b2b';
+    if (angry) { g.beginPath(); g.ellipse(0, -172, 6, 4.5 + Math.abs(shake) * 4, 0, 0, Math.PI * 2); g.fill(); g.stroke(); }
+    else { g.beginPath(); g.moveTo(-5, -172); g.lineTo(5, -172); g.stroke(); }
+    g.restore();
+    if (angry) {
+      // what she shouts
+      const t = since - 1.2;
+      const y = FLOOR_Y - 196;   // left of her head, so it does not cover the cat on the fridge
+      g.save();
+      g.font = '800 20px "Baloo 2", ui-rounded, "Arial Rounded MT Bold", system-ui, sans-serif';
+      const w = g.measureText(scoldText).width + 28;
+      const bx = clamp(x - 38 - w, 8, W - w - 8);
+      g.globalAlpha = clamp(t / 0.15, 0, 1);
+      g.fillStyle = '#fff'; g.strokeStyle = INK; g.lineWidth = 2.4;
+      g.beginPath(); g.roundRect(bx, y - 40, w, 42, 14); g.fill(); g.stroke();
+      g.beginPath(); g.moveTo(bx + w - 2, y - 28); g.lineTo(x - 24, y - 14); g.lineTo(bx + w - 2, y - 12); g.closePath(); g.fill(); g.stroke();
+      g.fillRect(bx + w - 5, y - 27, 5, 14);
+      g.fillStyle = '#c9304a'; g.textAlign = 'left';
+      g.fillText(scoldText, bx + 14, y - 12);
+      g.restore();
+    }
+  }
+
+  /** The first shot: a pulsing ring around the kitten and an arrow that says to pull it back. */
+  function drawPullHint() {
+    const t = performance.now() / 1000;
+    const bob = (Math.sin(t * 4) + 1) * 6;
+    const g = ctx;
+    g.save();
+    g.strokeStyle = '#fff'; g.lineWidth = 3.5;
+    g.globalAlpha = 0.6 + Math.sin(t * 6) * 0.3;
+    g.beginPath(); g.arc(LAUNCH.x, LAUNCH.y, 27 + Math.sin(t * 6) * 3, 0, Math.PI * 2); g.stroke();
+    g.globalAlpha = 1;
+    // the arrow: from the kitten back, away from the table
+    const from = { x: LAUNCH.x - 30, y: LAUNCH.y - 20 };
+    const to = { x: LAUNCH.x - 70 - bob, y: LAUNCH.y - 48 - bob * 0.7 };
+    const a = Math.atan2(to.y - from.y, to.x - from.x);
+    g.lineCap = 'round'; g.lineJoin = 'round';
+    for (const [color, width] of [[INK, 12], ['#ffd23f', 7]]) {
+      g.strokeStyle = String(color); g.lineWidth = Number(width);
+      g.beginPath(); g.moveTo(from.x, from.y); g.lineTo(to.x, to.y);
+      g.moveTo(to.x + Math.cos(a + 2.5) * 16, to.y + Math.sin(a + 2.5) * 16); g.lineTo(to.x, to.y); g.lineTo(to.x + Math.cos(a - 2.5) * 16, to.y + Math.sin(a - 2.5) * 16);
+      g.stroke();
+    }
+    g.restore();
+    drawText('Хвани котето и го дръпни назад!', 250, 86, 22, 1);
+  }
+
+  /** Until the first hit: a red pulsing crosshair on the cloth, where the kitten has to catch it. */
+  function drawClothTarget() {
+    const t = performance.now() / 1000;
+    const pulse = 1 + Math.sin(t * 6) * 0.12;
+    const g = ctx;
+    g.save();
+    g.translate(tableX + 2, tableTop + CLOTH_H / 2 - 4);
+    g.scale(pulse, pulse);
+    g.lineCap = 'butt';
+    const gap = 0.16;  // the rings are cut where the cross lines go through
+    const shape = () => {
+      for (const [r, w] of [[24, 6], [13, 3.6]]) {
+        g.lineWidth = w;
+        for (let k = 0; k < 4; k++) {
+          g.beginPath(); g.arc(0, 0, r, (k * Math.PI) / 2 + gap, ((k + 1) * Math.PI) / 2 - gap); g.stroke();
+        }
+      }
+      g.lineWidth = 3;
+      for (let k = 0; k < 4; k++) {
+        const a = (k * Math.PI) / 2;
+        g.beginPath(); g.moveTo(Math.cos(a) * 5, Math.sin(a) * 5); g.lineTo(Math.cos(a) * 33, Math.sin(a) * 33); g.stroke();
+      }
+    };
+    // a white outline first, so it shows on the red and white cloth
+    g.strokeStyle = '#fff';
+    g.save(); g.lineJoin = 'round';
+    for (const [r, w] of [[24, 6], [13, 3.6]]) { g.lineWidth = w + 4; g.beginPath(); g.arc(0, 0, r, 0, Math.PI * 2); g.stroke(); }
+    g.lineWidth = 7;
+    for (let k = 0; k < 4; k++) { const a = (k * Math.PI) / 2; g.beginPath(); g.moveTo(Math.cos(a) * 4, Math.sin(a) * 4); g.lineTo(Math.cos(a) * 35, Math.sin(a) * 35); g.stroke(); }
+    g.restore();
+    g.shadowColor = 'rgba(255,40,40,.7)'; g.shadowBlur = 8 + Math.sin(t * 6) * 6;
+    g.strokeStyle = '#d42a2a';
+    shape();
+    g.restore();
+    drawText(`Събори ${setFor(level).name}!`, tableX + tableW / 2, tableTop - 74, 26, 1);
   }
 
   function drawShot() {
@@ -896,8 +1196,10 @@ export function startGame(root, platform) {
         ctx.beginPath(); ctx.moveTo(shot.x, 8); ctx.lineTo(shot.x - 9, 24); ctx.lineTo(shot.x + 9, 24); ctx.closePath(); ctx.fill(); ctx.stroke();
       } else kitten(ctx, shot.x, shot.y, look, { pose: 'ball', mood: 'fierce', rot });
     } else if (state === 'hit') {
-      const down = cupFall?.broken && shot.y >= FLOOR_Y - CAT_R - 1;
-      if (down) kitten(ctx, shot.x - 6, FLOOR_Y - 20, look, { mood: 'happy', flip: true });
+      const down = brokenAt > 0 && shot.y >= FLOOR_Y - CAT_R - 1;
+      const running = scold && clock - brokenAt > 1.7;
+      const hop = running ? -Math.abs(Math.sin(clock * 16)) * 8 : 0;
+      if (down) kitten(ctx, shot.x - 6, FLOOR_Y - 20 + hop, look, { mood: 'happy', flip: true });
       else kitten(ctx, shot.x, shot.y, look, { pose: 'hang', mood: cloth > 20 ? 'happy' : 'fierce' });
     } else if (state === 'miss') {
       const squash = clock < 0.25 ? Math.sin((clock / 0.25) * Math.PI) * 0.6 : 0;
@@ -928,6 +1230,10 @@ export function startGame(root, platform) {
       if (b.kind === 'shard') {
         ctx.strokeStyle = INK; ctx.lineWidth = 1.2;
         ctx.beginPath(); ctx.moveTo(-b.size / 2, b.size / 3); ctx.lineTo(0, -b.size / 2); ctx.lineTo(b.size / 2, b.size / 2); ctx.closePath(); ctx.fill(); ctx.stroke();
+      } else if (b.kind === 'leg') {
+        ctx.strokeStyle = INK; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.ellipse(0, 2, 6, 8, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, -9, 3.2, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
       } else if (b.kind === 'heart') {
         const s = b.size / 10;
         ctx.beginPath(); ctx.moveTo(0, 4 * s); ctx.bezierCurveTo(-10 * s, -2 * s, -5 * s, -10 * s, 0, -5 * s); ctx.bezierCurveTo(5 * s, -10 * s, 10 * s, -2 * s, 0, 4 * s); ctx.fill();
@@ -959,9 +1265,13 @@ export function startGame(root, platform) {
     ctx.drawImage(background, 0, 0, W, H);
     drawFridge();
     drawWatcher();
+    drawChair();
     drawTable();
-    if (!cupFall) drawCup(tableX + TABLE_W * CUP_AT - cloth, TABLE_TOP - 3);
-    else if (!cupFall.broken) drawCup(cupFall.x, cupFall.y, cupFall.rot);
+    for (const it of items) {
+      if (!it.fall) drawItem(it, tableX + it.at - cloth, tableTop - 3);
+      else if (!it.fall.broken) drawItem(it, it.fall.x, it.fall.y, it.fall.rot);
+    }
+    if (showTarget && (state === 'intro' || state === 'aim' || state === 'fly')) drawClothTarget();
     // the last shot's path
     ctx.fillStyle = 'rgba(255,255,255,.75)';
     for (const p of trail) { ctx.beginPath(); ctx.arc(p.x, p.y, 3.2, 0, Math.PI * 2); ctx.fill(); }
@@ -969,8 +1279,10 @@ export function startGame(root, platform) {
     drawSlingshot(false);
     drawWaiting();
     drawSlingshot(true);
+    if (state === 'hit' && scold && brokenAt) drawWoman(clock - brokenAt);
     drawShot();
     drawBits();
+    if (state === 'aim' && tutorial && !aiming && pull === 0) drawPullHint();
     if (shout && shout.t < 1.2) drawText(shout.text, shout.x, shout.y, 26, shout.t);
     if (banner) drawText(banner.text, W / 2, H / 2 - 30, 64, Math.min(banner.t, 0.5));
     placeBubble();
@@ -1004,8 +1316,8 @@ export function startGame(root, platform) {
   const RULES = `
     <ul class="ak-rules">
       <li>Котката с бинокъла казва под какъв <b>ъгъл</b> да стреляш. Дърпай котето назад и го пусни.</li>
-      <li>Ъгълът се мери от <b>отвеса</b> под прашката: надолу е <b>остър</b>, право напред е <b>прав</b>, нагоре е <b>тъп</b>.</li>
-      <li>Уцелиш ли, котето се хваща за покривката и чашата пада. Имаш 3 котета.</li>
+      <li>Докато дърпаш, под прашката се вижда ъгълът от <b>отвеса</b>: надолу е <b>остър</b>, право напред е <b>прав</b>, нагоре е <b>тъп</b>.</li>
+      <li>Уцелиш ли, котето се хваща за покривката и всичко на масата пада. Имаш 3 котета.</li>
     </ul>
     <p class="ak-help">Клавиатура: ← → въртят ъгъла (Shift: по 5°), интервал стреля, P е пауза.</p>`;
 
@@ -1181,6 +1493,7 @@ export function startGame(root, platform) {
       [2600, 3400, 2900, 4100].forEach((f, k) => tone(f, 0.25, { delay: 0.03 + k * 0.05, volume: 0.04 }));
       [523, 659, 784, 1047].forEach((f, k) => tone(f, 0.16, { delay: 0.35 + k * 0.09, volume: 0.08 }));
     }
+    if (name === 'scold') [330, 262, 330, 247].forEach((f, k) => tone(f, 0.13, { type: 'square', to: f * 0.9, delay: k * 0.17, volume: 0.05 }));
     if (name === 'thud') tone(150, 0.2, { to: 60, volume: 0.2 });
     if (name === 'hiss') noise(0.7, { volume: 0.12, freq: 4000 });
     if (name === 'level') [523, 659, 784, 1047, 1319].forEach((f, k) => tone(f, 0.14, { delay: k * 0.08, volume: 0.09 }));

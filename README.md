@@ -4,4 +4,4 @@
 
 **Играй:** https://levacademy.aleksandrenko.com/angry-kittens/ (в LevAcademy: https://levacademy.aleksandrenko.com/app/#/angry-kittens)
 
-Това репо е само публикуваното копие. Кодът се пише в частното репо LTFB (`projects/lev-academy/games/angry-kittens`) и се качва тук със скрипта `publish.sh`. Последно публикуване: LTFB 41d6dce.
+Това репо е само публикуваното копие. Кодът се пише в частното репо LTFB (`projects/lev-academy/games/angry-kittens`) и се качва тук със скрипта `publish.sh`. Последно публикуване: LTFB cd5d6c1.
