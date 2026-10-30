@@ -1,0 +1,10 @@
+{
+  "id": "angry-kittens",
+  "name": "Сърдити котета",
+  "description": "Изстрелвай котета с прашка под точния ъгъл и събаряй чашата от масата.",
+  "icon": "icon.svg",
+  "route": "angry-kittens",
+  "contract": 2,
+  "permissions": ["user", "settings", "storage", "badges"],
+  "entry": "academy-app.js"
+}

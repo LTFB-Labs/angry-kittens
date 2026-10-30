@@ -1,0 +1,170 @@
+/* Сърдити котета: the page around the kitchen, the HUD, the cat's speech bubble and the screens over the canvas.
+   Sizes inside the stage are in cqw (its width), so everything scales with the canvas. Colours: bright blue,
+   orange and white, like a cartoon poster. */
+
+html, body { margin: 0; min-height: 100%; }
+body { background: #2f8fe8; }
+
+.angry-kittens {
+  --ak-font: "Baloo 2", ui-rounded, "SF Pro Rounded", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --ak-ink: #3a2219;
+  --ak-blue: #1b6fd1;
+  --ak-orange: #ff6b2c;
+  position: relative;
+  height: 100vh;
+  height: 100dvh;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  overflow: hidden;
+  font-family: var(--ak-font);
+  color: #fff;
+  background:
+    radial-gradient(50% 40% at 85% 10%, rgba(255,255,255,.35), transparent 70%),
+    radial-gradient(60% 50% at 0% 100%, #ff8a4c 0%, transparent 70%),
+    linear-gradient(160deg, #5cbcff 0%, #2f8fe8 60%, #1f78d6 100%);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---------- the stage ---------- */
+.ak-stage {
+  position: relative;
+  container-type: inline-size;
+  overflow: hidden;
+  border-radius: 1.2cqw;
+  background: #2f8fe8;
+  box-shadow: 0 1cqw 4cqw rgba(10, 50, 120, .45);
+  user-select: none;
+  -webkit-user-select: none;
+}
+.ak-stage canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.ak-stage canvas:active { cursor: grabbing; }
+
+/* ---------- HUD ---------- */
+.ak-hud {
+  position: absolute; left: 1.6cqw; right: 8cqw; top: 1.4cqw;
+  display: flex; gap: 1cqw; align-items: center;
+  pointer-events: none;
+}
+.ak-pill {
+  display: flex; align-items: center; gap: .8cqw;
+  height: 4.4cqw; padding: 0 1.6cqw;
+  border-radius: 99px;
+  background: #fff;
+  color: var(--ak-blue);
+  box-shadow: 0 .5cqw 0 rgba(10, 60, 140, .3);
+  font-size: 2.3cqw; font-weight: 800; line-height: 1; white-space: nowrap;
+}
+.ak-pill b { font-size: 2.7cqw; color: var(--ak-orange); }
+.ak-icon { font-size: 2.4cqw; }
+.ak-level { background: var(--ak-orange); color: #fff; }
+.ak-level b { color: #fff; }
+.ak-goal { margin: 0 auto; background: #ffd23f; color: var(--ak-ink); font-size: 2.4cqw; }
+.ak-goal[hidden] { display: flex; visibility: hidden; }
+.ak-lives { gap: .3cqw; padding: 0 1.2cqw; }
+.ak-lives i { font-style: normal; font-size: 2.6cqw; }
+.ak-lives i.ak-lost { filter: grayscale(1); opacity: .3; }
+
+.ak-round {
+  position: absolute; right: 1.6cqw; top: 1.4cqw;
+  width: 4.4cqw; height: 4.4cqw; padding: 0;
+  display: grid; place-items: center;
+  border: 0; border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 .5cqw 0 rgba(10, 60, 140, .3);
+  color: var(--ak-blue); font: 800 1.8cqw var(--ak-font);
+  cursor: pointer;
+}
+.ak-round:active { transform: translateY(.3cqw); box-shadow: 0 .2cqw 0 rgba(10, 60, 140, .3); }
+.ak-round:focus-visible { outline: .4cqw solid #ffd23f; outline-offset: .3cqw; }
+
+/* ---------- the cat's speech bubble ---------- */
+.ak-bubble {
+  position: absolute;
+  transform: translate(-82%, -100%);
+  max-width: 30cqw;
+  padding: 1.2cqw 1.8cqw;
+  border-radius: 2.4cqw;
+  background: #fff;
+  color: var(--ak-ink);
+  box-shadow: 0 .6cqw 0 rgba(10, 60, 140, .3);
+  text-align: center;
+  pointer-events: none;
+  animation: ak-pop .25s ease-out;
+}
+.ak-bubble::after {
+  content: ''; position: absolute; right: 12%; bottom: -1.4cqw;
+  border: .9cqw solid transparent; border-top: 1.2cqw solid #fff; border-bottom: 0;
+}
+.ak-bubble b { display: block; font-size: 2.3cqw; line-height: 1.15; }
+.ak-bubble small { display: block; margin-top: .4cqw; font-size: 1.6cqw; line-height: 1.2; color: #5b6b82; }
+.ak-bubble.ak-right { transform: translate(-18%, -100%); }
+.ak-bubble.ak-right::after { right: auto; left: 12%; }
+@keyframes ak-pop { from { scale: .8; opacity: 0; } }
+
+.ak-rotate { display: none; margin: 4vw 6vw 0; font-size: 4vw; text-align: center; }
+@media (orientation: portrait) and (max-width: 700px) { .ak-rotate { display: block; } }
+
+/* ---------- screens: start, pause, game over ---------- */
+.ak-screen {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  padding: 2cqw;
+  background: rgba(20, 80, 170, .55);
+  backdrop-filter: blur(3px);
+}
+.ak-screen[hidden] { display: none; }
+.ak-card {
+  width: min(66cqw, 100%); max-height: 100%; overflow: auto;
+  box-sizing: border-box;
+  padding: 2.6cqw 3.4cqw 2.4cqw;
+  border-radius: 3cqw;
+  background: #fff;
+  color: var(--ak-ink);
+  text-align: center;
+  box-shadow: 0 1cqw 0 rgba(10, 60, 140, .35);
+}
+.ak-title {
+  margin: 0;
+  font-size: 6.4cqw; font-weight: 800; line-height: 1; text-transform: uppercase; letter-spacing: -.1cqw;
+  color: #fff;
+  -webkit-text-stroke: .9cqw var(--ak-blue);
+  paint-order: stroke fill;
+  text-shadow: 0 .7cqw 0 #0f4f9e;
+}
+.ak-title.ak-small { font-size: 4.4cqw; margin-bottom: 1.4cqw; }
+.ak-lead { margin: 1cqw 0 1.4cqw; font-size: 3cqw; font-weight: 800; color: var(--ak-orange); }
+.ak-rules { margin: 0 0 1.2cqw; padding: 0; list-style: none; text-align: left; font-size: 1.9cqw; line-height: 1.35; }
+.ak-rules li { position: relative; padding-left: 3cqw; margin-bottom: .8cqw; }
+.ak-rules li::before {
+  content: ''; position: absolute; left: 0; top: .5cqw;
+  width: 1.6cqw; height: 1.6cqw; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #ffc49e, var(--ak-orange) 60%, #c94612);
+}
+.ak-help { margin: 0 0 1.2cqw; font-size: 1.5cqw; line-height: 1.35; color: #5b6b82; }
+.ak-best, .ak-record { margin: 0 0 1.2cqw; font-size: 2.4cqw; font-weight: 800; }
+.ak-record { color: var(--ak-orange); }
+.ak-final { margin: 0 0 1cqw; font-size: 3.6cqw; font-weight: 800; color: var(--ak-blue); }
+.ak-sub { margin: 1cqw 0; font-size: 2.2cqw; }
+.ak-top { margin: 0 0 1.6cqw; padding: 0; list-style: none; font-size: 2cqw; }
+.ak-top li {
+  display: grid; grid-template-columns: 4cqw 1fr 1fr 1.3fr; align-items: center;
+  padding: .7cqw 1.6cqw; border-radius: 1.6cqw;
+}
+.ak-top li:nth-child(odd) { background: rgba(27, 111, 209, .07); }
+.ak-top li.ak-me { background: #ffd23f; font-weight: 800; }
+.ak-top b { font-size: 2.4cqw; color: var(--ak-blue); }
+.ak-button {
+  display: block; width: 100%;
+  margin-top: 1.2cqw; padding: 1.4cqw;
+  border: 0; border-radius: 99px;
+  background: linear-gradient(#ff9a5c, var(--ak-orange));
+  box-shadow: 0 .7cqw 0 #c94612;
+  color: #fff; font: 800 3cqw var(--ak-font);
+  cursor: pointer;
+}
+.ak-button:active { transform: translateY(.5cqw); box-shadow: 0 .2cqw 0 #c94612; }
+.ak-button:focus-visible { outline: .4cqw solid var(--ak-blue); outline-offset: .3cqw; }
+.ak-button.ak-secondary { background: linear-gradient(#7cc8ff, #2f8fe8); box-shadow: 0 .7cqw 0 #1b6fd1; }
+.ak-details { margin-top: 1.6cqw; font-size: 1.9cqw; text-align: left; }
+.ak-details summary { cursor: pointer; font-weight: 800; text-align: center; }

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="bg">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Сърдити котета: уцели ъгъла</title>
+  <meta name="description" content="Игра за ъгли: изстрелвай котета с прашка под остър, прав или тъп ъгъл и после между точни градуси, за да съборят чашата от масата.">
+  <meta property="og:title" content="Сърдити котета: уцели ъгъла">
+  <meta property="og:description" content="Игра за ъгли от LevAcademy.">
+  <meta property="og:image" content="icon.svg">
+  <meta name="theme-color" content="#2f8fe8">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="game.css">
+</head>
+<body>
+  <!-- Opened alone the game keeps its scores in this browser. Inside LevAcademy academy-app.js starts it instead. -->
+  <main id="game"><noscript>Играта има нужда от JavaScript.</noscript></main>
+  <script type="module">
+    import { startGame, localPlatform } from './game.js';
+    startGame(document.getElementById('game'), localPlatform());
+  </script>
+</body>
+</html>
